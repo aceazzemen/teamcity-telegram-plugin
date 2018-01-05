@@ -70,7 +70,7 @@ public class TelegramNotificator extends NotificatorAdapter {
   private static List<UserPropertyInfo> USER_PROPERTIES = Collections.singletonList(
       new UserPropertyInfo(CHAT_ID_PROP, "Telegram chat id", null,
           (UserPropertyValidator) (propertyValue, editee, currentUserData) ->
-              StringUtil.isEmpty(propertyValue) || TelegramNotificator.isLong(propertyValue) ?
+              StringUtil.isEmpty(propertyValue) || ChatIdUtil.isChatIdInputValid(propertyValue) ?
                   null : "Chat id should be a number"));
 
   /**
@@ -293,30 +293,13 @@ public class TelegramNotificator extends NotificatorAdapter {
 
     LOG.debug("Send to telegram message: " +
         StringUtil.truncateStringValueWithDotsAtEnd(message, 80));
-    collectChatIds(users).forEach(chatId -> {
+    ChatIdUtil.collectChatIdsFromUsers(users).forEach(chatId -> {
       try {
         botManager.sendMessage(chatId, message);
       } catch (Exception ex) {
         LOG.warnAndDebugDetails("Can't send message to chatId='" + chatId + "'", ex);
       }
     });
-  }
-
-  /**
-   * @param users telegram users
-   * @return users ids without duplicates
-   */
-  private List<Long> collectChatIds(@NotNull Set<SUser> users) {
-    return users.stream()
-        .map(user -> user.getPropertyValue(TELEGRAM_PROP_KEY))
-        .filter(Objects::nonNull)
-        // looks like new Teamcity don't validate input with validator in user properties
-        // so we should check input before send (TW-47469). It's fixed at bugtrack but looks like
-        // it's still reproducing...
-        .filter(TelegramNotificator::isLong)
-        .map(Long::parseLong)
-        .distinct()
-        .collect(Collectors.toList());
   }
 
   private Configuration createFreeMarkerConfig(@NotNull Path configDir) throws IOException {
@@ -327,14 +310,5 @@ public class TelegramNotificator extends NotificatorAdapter {
     cfg.setTemplateUpdateDelay(TeamCityProperties.getInteger(
         "teamcity.notification.template.update.interval", 60));
     return cfg;
-  }
-
-  private static boolean isLong(@NotNull String value) {
-    try {
-      Long.parseLong(value);
-      return true;
-    } catch (NumberFormatException ex) {
-      return false;
-    }
   }
 }
